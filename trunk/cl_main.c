@@ -71,6 +71,7 @@ cvar_t  cl_autodemo_allowunfinished = { "cl_autodemo_allowunfinished", "0" };
 cvar_t	cl_demoui = {"cl_demoui", "1", CVAR_ARCHIVE};
 cvar_t	cl_demouitimeout = {"cl_demouitimeout", "2.5", CVAR_ARCHIVE};
 cvar_t	cl_demouihidespeed = {"cl_demouihidespeed", "2", CVAR_ARCHIVE};
+cvar_t	cl_approx_demo_velocity = {"cl_approx_demo_velocity", "1", CVAR_ARCHIVE};
 
 client_static_t	cls;
 client_state_t	cl;
@@ -759,7 +760,7 @@ void CL_RelinkEntities (void)
 {
 	int			i, j, num_vweps;
 	float		frac, f, d, bobjrotate;
-	vec3_t		delta, oldorg;
+	vec3_t		delta, oldorg, v1, v0;
 	entity_t	*ent;
 	dlight_t	*dl;
 	model_t		*model;
@@ -781,6 +782,17 @@ void CL_RelinkEntities (void)
 
 	if (cls.demoplayback)
 	{
+		ent = &cl_entities[cl.viewentity];
+		if (ent && cl_approx_demo_velocity.value > 0.0) {
+			for (i = 0; i < 3; i++) {
+				v0[i] = (ent->msg_origins[0][i] - ent->msg_origins[1][i]) / (cl.mtime[0] - cl.mtime[1]);
+				v1[i] = (ent->msg_origins[1][i] - ent->msg_origins[2][i]) / (cl.mtime[1] - cl.mtime[2]);
+
+				// interpolate player velocity using dx/dt approximation
+				cl.velocity[i] = v1[i] + frac * (v0[i] - v1[i]);
+			}		
+		}
+
 		// interpolate the angles
 		for (j = 0 ; j < 3 ; j++)
 		{
@@ -1229,7 +1241,8 @@ void CL_RelinkEntities (void)
 #ifdef GLQUAKE
 		// view weapon support
 		GetViewWeaponModel(&vwep_modelindex);
-		if (cl_viewweapons.value && ent->modelindex == cl_modelindex[mi_player] && r_loadviewweapons && !r_loadq3player && (vwep_modelindex != -1))
+		if (cl_viewweapons.value && ent->modelindex == cl_modelindex[mi_player] && r_loadviewweapons && !r_loadq3player && (vwep_modelindex != -1) &&
+			((ent->frame >= 6 && ent->frame <= 16) || (ent->frame >= 35 && ent->frame <= 40) || (ent->frame >= 103 && ent->frame <= 118)))
 		{
 			entity_t *vwepent = &view_weapons[num_vweps];
 
@@ -1505,6 +1518,7 @@ void CL_Init (void)
 	Cvar_Register(&cl_demoui);
 	Cvar_Register(&cl_demouitimeout);
 	Cvar_Register(&cl_demouihidespeed);
+	Cvar_Register(&cl_approx_demo_velocity);
 
 	if (COM_CheckParm("-noindphys"))
 	{
